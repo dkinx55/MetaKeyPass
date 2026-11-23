@@ -6,12 +6,18 @@ import java.lang.reflect.Method;
 import java.util.Set;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-public class MetaKeyHook implements IXposedHookLoadPackage {
+public class MetaKeyHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+
+    @Override
+    public void initZygote(StartupParam startupParam) {
+        XposedBridge.log(TAG + ": initZygote called, module loaded");
+    }
 
     private static final String TAG = "MetaKeyPass";
 
