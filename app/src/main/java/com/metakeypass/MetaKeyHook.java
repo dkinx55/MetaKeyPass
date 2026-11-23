@@ -2,6 +2,8 @@ package com.metakeypass;
 
 import android.view.KeyEvent;
 
+import java.lang.reflect.Method;
+
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -14,45 +16,91 @@ public class MetaKeyHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
+        XposedBridge.log(TAG + ": handleLoadPackage called for: " + lpparam.packageName);
+
         if (!lpparam.packageName.equals("android")) return;
 
-        XposedBridge.log(TAG + ": Hooking PhoneWindowManager");
+        XposedBridge.log(TAG + ": Hooking system package");
 
+        // Hook 1: Oplus StrategyPadKeyBoardShortcut (primary - handles Meta key on OnePlus pads)
+        hookOplusStrategy(lpparam.classLoader);
+
+        // Hook 2: PhoneWindowManager fallback (standard Android path)
+        hookPhoneWindowManager(lpparam.classLoader);
+    }
+
+    private void hookOplusStrategy(ClassLoader classLoader) {
         try {
-            Class<?> pwmClass = XposedHelpers.findClass(
-                    "com.android.server.policy.PhoneWindowManager",
-                    lpparam.classLoader
+            Class<?> strategyClass = XposedHelpers.findClass(
+                    "com.android.server.policy.StrategyPadKeyBoardShortcut",
+                    classLoader
             );
+            XposedBridge.log(TAG + ": Found StrategyPadKeyBoardShortcut, hooking all methods named excuteShortCut");
 
-            // Hook interceptKeyBeforeDispatching - returns 0 to pass key to app
-            XposedHelpers.findAndHookMethod(
-                    pwmClass,
-                    "interceptKeyBeforeDispatching",
-                    "android.view.WindowManagerPolicy$WindowState",
-                    KeyEvent.class,
-                    int.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            KeyEvent event = (KeyEvent) param.args[1];
-                            if (event == null) return;
-
+            int count = XposedBridge.hookAllMethods(strategyClass, "excuteShortCut", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    for (Object arg : param.args) {
+                        if (arg instanceof KeyEvent) {
+                            KeyEvent event = (KeyEvent) arg;
                             int keyCode = event.getKeyCode();
-
-                            // Pass META keys straight through to foreground app
                             if (keyCode == KeyEvent.KEYCODE_META_LEFT ||
                                     keyCode == KeyEvent.KEYCODE_META_RIGHT) {
-                                param.setResult(0L); // 0 = do not consume, pass to app
-                                XposedBridge.log(TAG + ": Passing META key to foreground app");
+                                XposedBridge.log(TAG + ": Blocking Meta key in StrategyPadKeyBoardShortcut");
+                                param.setResult(null);
+                                return;
                             }
                         }
                     }
-            );
+                }
+            });
 
-            XposedBridge.log(TAG + ": Hook installed successfully");
+            XposedBridge.log(TAG + ": Hooked " + count + " excuteShortCut overloads");
 
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": Hook failed: " + t.getMessage());
+            XposedBridge.log(TAG + ": StrategyPadKeyBoardShortcut hook failed: " + t.getMessage());
+        }
+    }
+
+    private void hookPhoneWindowManager(ClassLoader classLoader) {
+        try {
+            Class<?> pwmClass = XposedHelpers.findClass(
+                    "com.android.server.policy.PhoneWindowManager",
+                    classLoader
+            );
+
+            // Log available overloads of interceptKeyBeforeDispatching
+            int found = 0;
+            for (Method m : pwmClass.getDeclaredMethods()) {
+                if (m.getName().equals("interceptKeyBeforeDispatching")) {
+                    XposedBridge.log(TAG + ": PWM method: " + m);
+                    found++;
+                }
+            }
+            XposedBridge.log(TAG + ": Found " + found + " interceptKeyBeforeDispatching overloads");
+
+            int count = XposedBridge.hookAllMethods(pwmClass, "interceptKeyBeforeDispatching", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    for (Object arg : param.args) {
+                        if (arg instanceof KeyEvent) {
+                            KeyEvent event = (KeyEvent) arg;
+                            int keyCode = event.getKeyCode();
+                            if (keyCode == KeyEvent.KEYCODE_META_LEFT ||
+                                    keyCode == KeyEvent.KEYCODE_META_RIGHT) {
+                                XposedBridge.log(TAG + ": Passing META key via PWM hook");
+                                param.setResult(0L);
+                                return;
+                            }
+                        }
+                    }
+                }
+            });
+
+            XposedBridge.log(TAG + ": Hooked " + count + " interceptKeyBeforeDispatching overloads");
+
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": PhoneWindowManager hook failed: " + t.getMessage());
         }
     }
 }
