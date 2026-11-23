@@ -3,6 +3,7 @@ package com.metakeypass;
 import android.view.KeyEvent;
 
 import java.lang.reflect.Method;
+import java.util.Set;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -37,7 +38,7 @@ public class MetaKeyHook implements IXposedHookLoadPackage {
             );
             XposedBridge.log(TAG + ": Found StrategyPadKeyBoardShortcut, hooking all methods named excuteShortCut");
 
-            int count = XposedBridge.hookAllMethods(strategyClass, "excuteShortCut", new XC_MethodHook() {
+            Set<XC_MethodHook.Unhook> hooks1 = XposedBridge.hookAllMethods(strategyClass, "excuteShortCut", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     for (Object arg : param.args) {
@@ -55,7 +56,7 @@ public class MetaKeyHook implements IXposedHookLoadPackage {
                 }
             });
 
-            XposedBridge.log(TAG + ": Hooked " + count + " excuteShortCut overloads");
+            XposedBridge.log(TAG + ": Hooked " + hooks1.size() + " excuteShortCut overloads");
 
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": StrategyPadKeyBoardShortcut hook failed: " + t.getMessage());
@@ -79,7 +80,7 @@ public class MetaKeyHook implements IXposedHookLoadPackage {
             }
             XposedBridge.log(TAG + ": Found " + found + " interceptKeyBeforeDispatching overloads");
 
-            int count = XposedBridge.hookAllMethods(pwmClass, "interceptKeyBeforeDispatching", new XC_MethodHook() {
+            Set<XC_MethodHook.Unhook> hooks2 = XposedBridge.hookAllMethods(pwmClass, "interceptKeyBeforeDispatching", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     for (Object arg : param.args) {
@@ -97,7 +98,7 @@ public class MetaKeyHook implements IXposedHookLoadPackage {
                 }
             });
 
-            XposedBridge.log(TAG + ": Hooked " + count + " interceptKeyBeforeDispatching overloads");
+            XposedBridge.log(TAG + ": Hooked " + hooks2.size() + " interceptKeyBeforeDispatching overloads");
 
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": PhoneWindowManager hook failed: " + t.getMessage());
